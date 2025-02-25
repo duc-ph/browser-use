@@ -4,7 +4,7 @@
     focusHighlightIndex: -1,
     viewportExpansion: 0,
     debugMode: false,
-    externalBoundingBoxes: [], // New parameter for vision-based detection
+    externalBoundingBoxes: [], // New parameter for bounding boxes from OmniParser
     mergeThreshold: 0.7, // Threshold for considering boxes as overlapping (0-1)
   }
 ) => {
@@ -819,6 +819,8 @@
   /**
    * Creates a node data object for a given node and its descendants.
    */
+  const domDetectedElements = new Set();
+
   function buildDomTree(node, parentIframe = null) {
     if (debugMode) PERF_METRICS.nodeMetrics.totalNodes++;
 
