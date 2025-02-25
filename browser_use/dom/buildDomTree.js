@@ -4,9 +4,19 @@
     focusHighlightIndex: -1,
     viewportExpansion: 0,
     debugMode: false,
+    externalBoundingBoxes: [], // New parameter for vision-based detection
+    mergeThreshold: 0.7, // Threshold for considering boxes as overlapping (0-1)
   }
 ) => {
-  const { doHighlightElements, focusHighlightIndex, viewportExpansion, debugMode } = args;
+  const { 
+    doHighlightElements, 
+    focusHighlightIndex, 
+    viewportExpansion, 
+    debugMode,
+    externalBoundingBoxes,
+    mergeThreshold 
+  } = args;
+
   let highlightIndex = 0; // Reset highlight index
 
   // Add timing stack to handle recursion
@@ -183,6 +193,52 @@
    */
   const DOM_HASH_MAP = {};
 
+  /**
+   * Calculate Intersection over Union (IoU) between two bounding boxes
+   */
+    function calculateIoU(box1, box2) {
+      const intersectionX1 = Math.max(box1.left, box2.left);
+      const intersectionY1 = Math.max(box1.top, box2.top);
+      const intersectionX2 = Math.min(box1.right, box2.right);
+      const intersectionY2 = Math.min(box1.bottom, box2.bottom);
+  
+      if (intersectionX2 < intersectionX1 || intersectionY2 < intersectionY1) {
+        return 0;
+      }
+  
+      const intersectionArea = (intersectionX2 - intersectionX1) * (intersectionY2 - intersectionY1);
+      const box1Area = (box1.right - box1.left) * (box1.bottom - box1.top);
+      const box2Area = (box2.right - box2.left) * (box2.bottom - box2.top);
+      
+      return intersectionArea / (box1Area + box2Area - intersectionArea);
+    }
+  
+    /**
+     * Find the DOM element that best matches a bounding box
+     */
+    function findMatchingElement(boundingBox) {
+      let bestMatch = null;
+      let bestIoU = 0;
+  
+      // Query elements in the approximate area
+      const elements = document.elementsFromPoint(
+        boundingBox.left + (boundingBox.right - boundingBox.left) / 2,
+        boundingBox.top + (boundingBox.bottom - boundingBox.top) / 2
+      );
+  
+      for (const element of elements) {
+        const rect = element.getBoundingClientRect();
+        const iou = calculateIoU(boundingBox, rect);
+        
+        if (iou > bestIoU && iou > mergeThreshold) {
+          bestMatch = element;
+          bestIoU = iou;
+        }
+      }
+  
+      return bestMatch;
+    }
+
   const ID = { current: 0 };
 
   const HIGHLIGHT_CONTAINER_ID = "playwright-highlight-container";
@@ -190,8 +246,8 @@
   /**
    * Highlights an element in the DOM and returns the index of the next element.
    */
-  function highlightElement(element, index, parentIframe = null) {
-    if (!element) return index;
+  function highlightElement(element, index, parentIframe = null, boundingBox = null) {
+    if (!element && !boundingBox) return index;
 
     try {
       // Create or get highlight container
@@ -210,10 +266,15 @@
       }
 
       // Get element position
-      const rect = measureDomOperation(
-        () => element.getBoundingClientRect(),
-        'getBoundingClientRect'
-      );
+      let rect;
+      if (boundingBox) {
+        rect = boundingBox;
+      } else {
+        rect = measureDomOperation(
+          () => element.getBoundingClientRect(),
+          'getBoundingClientRect'
+        );
+      }
       
       if (!rect) return index;
 
@@ -272,7 +333,7 @@
       label.style.padding = "1px 4px";
       label.style.borderRadius = "4px";
       label.style.fontSize = `${Math.min(12, Math.max(8, rect.height / 2))}px`;
-      label.textContent = index;
+      label.textContent = boundingBox ? `V${index}` : index; // Prefix vision-based detections with 'V'
 
       const labelWidth = 20;
       const labelHeight = 16;
@@ -866,6 +927,14 @@
           if (nodeData.isInteractive) {
             nodeData.isInViewport = true;
             nodeData.highlightIndex = highlightIndex++;
+            
+            // Store the bounding rect for later comparison
+            const rect = getCachedBoundingRect(node);
+            domDetectedElements.add({
+              element: node,
+              rect: rect,
+              highlighted: false
+            });
 
             if (doHighlightElements) {
               if (focusHighlightIndex >= 0) {
@@ -953,6 +1022,44 @@
   getEffectiveScroll = measureTime(getEffectiveScroll);
 
   const rootId = buildDomTree(document.body);
+
+  // After building DOM tree, process external bounding boxes
+  if (externalBoundingBoxes && externalBoundingBoxes.length > 0) {
+    for (const box of externalBoundingBoxes) {
+      let isOverlapping = false;
+      
+      // Check if this box significantly overlaps with any DOM-detected element
+      for (const domElement of domDetectedElements) {
+        const iou = calculateIoU(box, domElement.rect);
+        if (iou > mergeThreshold) {
+          isOverlapping = true;
+          break;
+        }
+      }
+
+      // If not overlapping, try to find a matching DOM element or highlight as new
+      if (!isOverlapping) {
+        const matchingElement = findMatchingElement(box);
+        if (matchingElement) {
+          // Add to DOM_HASH_MAP with special flag
+          const id = `${ID.current++}`;
+          DOM_HASH_MAP[id] = {
+            tagName: matchingElement.tagName.toLowerCase(),
+            attributes: {},
+            xpath: getXPathTree(matchingElement, true),
+            isVisionDetected: true,
+            highlightIndex: highlightIndex,
+            boundingBox: box
+          };
+        }
+        
+        // Highlight the box
+        if (doHighlightElements) {
+          highlightElement(null, highlightIndex++, null, box);
+        }
+      }
+    }
+  }
 
   // Clear the cache before starting
   DOM_CACHE.clearCache();
