@@ -128,6 +128,8 @@ class Agent(Generic[Context]):
 		injected_agent_state: Optional[AgentState] = None,
 		#
 		context: Context | None = None,
+		# OmniParser inference endpoint
+		omniparser_endpoint: str | None = None,
 	):
 		if page_extraction_llm is None:
 			page_extraction_llm = llm
