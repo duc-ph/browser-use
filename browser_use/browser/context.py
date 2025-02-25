@@ -31,7 +31,7 @@ from browser_use.browser.views import (
 	TabInfo,
 	URLNotAllowedError,
 )
-from browser_use.dom.service import DomService
+from browser_use.dom.service import DomService, OmniParserService
 from browser_use.dom.views import DOMElementNode, SelectorMap
 from browser_use.utils import time_execution_async, time_execution_sync
 
@@ -135,6 +135,7 @@ class BrowserContextConfig:
 
 	_force_keep_context_alive: bool = False
 
+	omniparser_endpoint: str | None = None
 
 @dataclass
 class BrowserSession:
@@ -704,14 +705,24 @@ class BrowserContext:
 
 		try:
 			await self.remove_highlights()
+			screenshot_b64 = await self.take_screenshot()
+
+			if self.config.omniparser_endpoint:
+				omniparser_service = OmniParserService(
+					inference_endpoint=self.config.omniparser_endpoint,
+				)
+				omniparser_bboxes = await omniparser_service.get_bboxes(base64_image=screenshot_b64)
+			else:
+				omniparser_bboxes = []
+
 			dom_service = DomService(page)
 			content = await dom_service.get_clickable_elements(
 				focus_element=focus_element,
 				viewport_expansion=self.config.viewport_expansion,
 				highlight_elements=self.config.highlight_elements,
+				externalBoundingBoxes=omniparser_bboxes,
 			)
 
-			screenshot_b64 = await self.take_screenshot()
 			pixels_above, pixels_below = await self.get_scroll_info(page)
 
 			self.current_state = BrowserState(

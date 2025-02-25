@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from importlib import resources
 from typing import TYPE_CHECKING, Optional
 
+import requests
+
 if TYPE_CHECKING:
 	from playwright.async_api import Page
 
@@ -26,6 +28,23 @@ class ViewportInfo:
 	height: int
 
 
+class OmniParserService:
+    def __init__(self, inference_endpoint: str):
+        self.inference_endpoint = inference_endpoint.rstrip("/")
+
+    async def get_bboxes(self, base64_image: str) -> list[str]:
+        url = f"{self.inference_endpoint}/parse/"
+        payload = {
+            "base64_image": base64_image
+        }
+
+        response = requests.post(url, json=payload)
+        if response.status_code == 200:
+            result = response.json()
+            return result
+        else:
+            raise Exception(f'{response.status_code} - {response.text}')
+
 class DomService:
 	def __init__(self, page: 'Page'):
 		self.page = page
@@ -40,8 +59,9 @@ class DomService:
 		highlight_elements: bool = True,
 		focus_element: int = -1,
 		viewport_expansion: int = 0,
+		externalBoundingBoxes: list = [], # passing the externally provided bounding boxes from OmniParser
 	) -> DOMState:
-		element_tree, selector_map = await self._build_dom_tree(highlight_elements, focus_element, viewport_expansion)
+		element_tree, selector_map = await self._build_dom_tree(highlight_elements, focus_element, viewport_expansion, externalBoundingBoxes)
 		return DOMState(element_tree=element_tree, selector_map=selector_map)
 
 	@time_execution_async('--build_dom_tree')
@@ -50,6 +70,7 @@ class DomService:
 		highlight_elements: bool,
 		focus_element: int,
 		viewport_expansion: int,
+		externalBoundingBoxes: list,
 	) -> tuple[DOMElementNode, SelectorMap]:
 		if await self.page.evaluate('1+1') != 2:
 			raise ValueError('The page cannot evaluate javascript code properly')
@@ -63,6 +84,7 @@ class DomService:
 			'focusHighlightIndex': focus_element,
 			'viewportExpansion': viewport_expansion,
 			'debugMode': debug_mode,
+			'externalBoundingBoxes': externalBoundingBoxes,
 		}
 
 		try:
