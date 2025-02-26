@@ -196,48 +196,49 @@
   /**
    * Calculate Intersection over Union (IoU) between two bounding boxes
    */
-    function calculateIoU(box1, box2) {
-      const intersectionX1 = Math.max(box1.left, box2.left);
-      const intersectionY1 = Math.max(box1.top, box2.top);
-      const intersectionX2 = Math.min(box1.right, box2.right);
-      const intersectionY2 = Math.min(box1.bottom, box2.bottom);
-  
-      if (intersectionX2 < intersectionX1 || intersectionY2 < intersectionY1) {
-        return 0;
-      }
-  
-      const intersectionArea = (intersectionX2 - intersectionX1) * (intersectionY2 - intersectionY1);
-      const box1Area = (box1.right - box1.left) * (box1.bottom - box1.top);
-      const box2Area = (box2.right - box2.left) * (box2.bottom - box2.top);
+  function calculateIoU(box1, box2) {
+    const intersectionX1 = Math.max(box1.left, box2.left);
+    const intersectionY1 = Math.max(box1.top, box2.top);
+    const intersectionX2 = Math.min(box1.right, box2.right);
+    const intersectionY2 = Math.min(box1.bottom, box2.bottom);
+
+    if (intersectionX2 < intersectionX1 || intersectionY2 < intersectionY1) {
+      return 0;
+    }
+
+    const intersectionArea = (intersectionX2 - intersectionX1) * (intersectionY2 - intersectionY1);
+    const box1Area = (box1.right - box1.left) * (box1.bottom - box1.top);
+    const box2Area = (box2.right - box2.left) * (box2.bottom - box2.top);
+    
+    return intersectionArea / (box1Area + box2Area - intersectionArea);
+  }
+
+  /**
+   * Find the DOM element that best matches a bounding box
+   */
+  function findMatchingElement(boundingBox) {
+    let bestMatch = null;
+    let bestIoU = 0;
+
+    // Query elements in the approximate area
+    const [x_min, y_min, x_max, y_max] = boundingBox;
+    const x_center = Math.floor((x_min + x_max) / 2);
+    const y_center = Math.floor((y_min + y_max) / 2);
+
+    const elements = document.elementsFromPoint(x_center, y_center);
+
+    for (const element of elements) {
+      const rect = element.getBoundingClientRect();
+      const iou = calculateIoU(boundingBox, rect);
       
-      return intersectionArea / (box1Area + box2Area - intersectionArea);
-    }
-  
-    /**
-     * Find the DOM element that best matches a bounding box
-     */
-    function findMatchingElement(boundingBox) {
-      let bestMatch = null;
-      let bestIoU = 0;
-  
-      // Query elements in the approximate area
-      const elements = document.elementsFromPoint(
-        boundingBox.left + (boundingBox.right - boundingBox.left) / 2,
-        boundingBox.top + (boundingBox.bottom - boundingBox.top) / 2
-      );
-  
-      for (const element of elements) {
-        const rect = element.getBoundingClientRect();
-        const iou = calculateIoU(boundingBox, rect);
-        
-        if (iou > bestIoU && iou > mergeThreshold) {
-          bestMatch = element;
-          bestIoU = iou;
-        }
+      if (iou > bestIoU && iou > mergeThreshold) {
+        bestMatch = element;
+        bestIoU = iou;
       }
-  
-      return bestMatch;
     }
+
+    return bestMatch;
+  }
 
   const ID = { current: 0 };
 
