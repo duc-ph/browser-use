@@ -247,8 +247,8 @@
   /**
    * Highlights an element in the DOM and returns the index of the next element.
    */
-  function highlightElement(element, index, parentIframe = null, boundingBox = null) {
-    if (!element && !boundingBox) return index;
+  function highlightElement(element, index, parentIframe = null) {
+    if (!element) return index;
 
     try {
       // Create or get highlight container
@@ -267,16 +267,11 @@
       }
 
       // Get element position
-      let rect;
-      if (boundingBox) {
-        rect = boundingBox;
-      } else {
-        rect = measureDomOperation(
-          () => element.getBoundingClientRect(),
-          'getBoundingClientRect'
-        );
-      }
-      
+      const rect = measureDomOperation(
+        () => element.getBoundingClientRect(),
+        'getBoundingClientRect'
+      );
+
       if (!rect) return index;
 
       // Generate a color based on the index
@@ -334,7 +329,7 @@
       label.style.padding = "1px 4px";
       label.style.borderRadius = "4px";
       label.style.fontSize = `${Math.min(12, Math.max(8, rect.height / 2))}px`;
-      label.textContent = boundingBox ? `V${index}` : index; // Prefix vision-based detections with 'V'
+      label.textContent = index;
 
       const labelWidth = 20;
       const labelHeight = 16;
