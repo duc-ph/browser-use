@@ -193,6 +193,23 @@
    */
   const DOM_HASH_MAP = {};
 
+  function bboxToDOMRect(bbox) {
+    const [x_min, y_min, x_max, y_max] = bbox;
+    const width = x_max - x_min;
+    const height = y_max - y_min;
+    
+    return {
+        x: x_min,
+        y: y_min,
+        width: width,
+        height: height,
+        top: y_min,
+        right: x_min + width,
+        bottom: y_min + height,
+        left: x_min
+    };
+  };
+
   /**
    * Calculate Intersection over Union (IoU) between two bounding boxes
    */
@@ -216,29 +233,29 @@
   /**
    * Find the DOM element that best matches a bounding box
    */
-  function findMatchingElement(boundingBox) {
+  function findMatchingElement(rect) {
     let bestMatch = null;
     let bestIoU = 0;
 
-    // Query elements in the approximate area
-    const [x_min, y_min, x_max, y_max] = boundingBox;
-    const x_center = Math.floor((x_min + x_max) / 2);
-    const y_center = Math.floor((y_min + y_max) / 2);
+    // Compute center point of the rect
+    const x_center = Math.floor(rect.x + rect.width / 2);
+    const y_center = Math.floor(rect.y + rect.height / 2);
 
+    // Query elements in the approximate area
     const elements = document.elementsFromPoint(x_center, y_center);
 
     for (const element of elements) {
-      const rect = element.getBoundingClientRect();
-      const iou = calculateIoU(boundingBox, rect);
-      
-      if (iou > bestIoU && iou > mergeThreshold) {
-        bestMatch = element;
-        bestIoU = iou;
-      }
+        const elementRect = element.getBoundingClientRect();
+        const iou = calculateIoU(rect, elementRect);
+        
+        if (iou > bestIoU && iou > mergeThreshold) {
+            bestMatch = element;
+            bestIoU = iou;
+        }
     }
 
     return bestMatch;
-  }
+}
 
   const ID = { current: 0 };
 
@@ -1059,10 +1076,11 @@
   if (externalBoundingBoxes && externalBoundingBoxes.length > 0) {
     for (const box of externalBoundingBoxes) {
       let isOverlapping = false;
+      const rect = bboxToDOMRect(box);
       
       // Check if this box significantly overlaps with any DOM-detected element
       for (const domElement of domDetectedElements) {
-        const iou = calculateIoU(box, domElement.rect);
+        const iou = calculateIoU(rect, domElement.rect);
         if (iou > mergeThreshold) {
           isOverlapping = true;
           break;
@@ -1071,23 +1089,23 @@
 
       // If not overlapping, try to find a matching DOM element or highlight as new
       if (!isOverlapping) {
-        const matchingElement = findMatchingElement(box);
+        const matchingElement = findMatchingElement(rect);
         if (matchingElement) {
           // Add to DOM_HASH_MAP with special flag
           const id = `${ID.current++}`;
           DOM_HASH_MAP[id] = {
             tagName: matchingElement.tagName.toLowerCase(),
-            attributes: {},
             xpath: getXPathTree(matchingElement, true),
-            isVisionDetected: true,
-            highlightIndex: highlightIndex,
-            boundingBox: box
+            children: [],
+            // TODO: write logic for these 2 fields
+            isInteractive: true,
+            isTopElement: true,
           };
         }
         
         // Highlight the box
         if (doHighlightElements) {
-          highlightElement(null, highlightIndex++, null, box);
+          highlightElement(matchingElement, highlightIndex++);
         }
       }
     }

@@ -210,6 +210,9 @@ class Agent(Generic[Context]):
 			self.browser = Browser()
 			self.browser_context = BrowserContext(browser=self.browser)
 
+		# Add OmniParser endpoint to config
+		self.browser_context.config.omniparser_endpoint = omniparser_endpoint
+
 		# Callbacks
 		self.register_new_step_callback = register_new_step_callback
 		self.register_done_callback = register_done_callback

@@ -4,6 +4,9 @@ import logging
 from dataclasses import dataclass
 from importlib import resources
 from typing import TYPE_CHECKING, Optional
+import base64
+import io
+from PIL import Image
 
 import requests
 
@@ -31,19 +34,28 @@ class ViewportInfo:
 class OmniParserService:
     def __init__(self, inference_endpoint: str):
         self.inference_endpoint = inference_endpoint.rstrip("/")
+    
+    def get_image_dimensions(self, base64_string):
+        image_data = base64.b64decode(base64_string)
+        image = Image.open(io.BytesIO(image_data))
+        return image.size  # (width, height)
 
-    async def get_bboxes(self, base64_image: str) -> list[str]:
+    async def get_bboxes(self, base64_image: str) -> list[list]:
         url = f"{self.inference_endpoint}/parse/"
         payload = {
             "base64_image": base64_image
         }
+        width, height = self.get_image_dimensions(base64_image)
 
         response = requests.post(url, json=payload)
         if response.status_code == 200:
             result = response.json()
-            return result
+            mask = [width, height, width, height]
+            return [[int(dim * norm) for dim, norm in zip(element['bbox'], mask)] for element in result['parsed_content_list']]
         else:
-            raise Exception(f'{response.status_code} - {response.text}')
+            print(f'{response.status_code} - {response.text}')
+            return []
+
 
 class DomService:
 	def __init__(self, page: 'Page'):
