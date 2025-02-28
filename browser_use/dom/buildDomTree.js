@@ -866,7 +866,7 @@
   /**
    * Creates a node data object for a given node and its descendants.
    */
-  const domDetectedElements = new Set();
+  let domDetectedElements = new Set();
 
   function buildDomTree(node, parentIframe = null) {
     if (debugMode) PERF_METRICS.nodeMetrics.totalNodes++;
@@ -1074,38 +1074,41 @@
 
   // After building DOM tree, process external bounding boxes
   if (externalBoundingBoxes && externalBoundingBoxes.length > 0) {
+    // Convert domDetectedElements to an array for easier processing
+    const domElementsArray = Array.from(domDetectedElements);
+    
     for (const box of externalBoundingBoxes) {
       let isOverlapping = false;
       const rect = bboxToDOMRect(box);
       
-      // Check if this box significantly overlaps with any DOM-detected element
-      for (const domElement of domDetectedElements) {
+      // Check overlap with existing elements
+      for (const domElement of domElementsArray) {
         const iou = calculateIoU(rect, domElement.rect);
         if (iou > mergeThreshold) {
           isOverlapping = true;
           break;
         }
       }
-
       // If not overlapping, try to find a matching DOM element or highlight as new
       if (!isOverlapping) {
         const matchingElement = findMatchingElement(rect);
         if (matchingElement) {
-          // Add to DOM_HASH_MAP with special flag
           const id = `${ID.current++}`;
           DOM_HASH_MAP[id] = {
             tagName: matchingElement.tagName.toLowerCase(),
             xpath: getXPathTree(matchingElement, true),
             children: [],
-            // TODO: write logic for these 2 fields
             isInteractive: true,
             isTopElement: true,
+            isVisible: true,
+            isInViewport: true,
+            highlightIndex: highlightIndex
           };
-        }
-        
-        // Highlight the box
-        if (doHighlightElements) {
-          highlightElement(matchingElement, highlightIndex++);
+
+          // Create a highlight overlay for this element
+          if (doHighlightElements) {
+            highlightElement(matchingElement, highlightIndex++);
+          }
         }
       }
     }

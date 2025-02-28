@@ -97,6 +97,7 @@ class DomService:
 			'viewportExpansion': viewport_expansion,
 			'debugMode': debug_mode,
 			'externalBoundingBoxes': externalBoundingBoxes,
+			'mergeThreshold': 0.7,
 		}
 
 		try:
